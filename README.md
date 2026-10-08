@@ -79,3 +79,9 @@ python scripts/smoke.py
 - `Core/TrackCatalog.cs` — все 60 записей каталога; длительности справочные, не связаны с аудиофайлами.
 - `Modules/GuestModule.cs`, `Modules/DjModule.cs` — только два функциональных модуля.
 - `Core/`, QR-генерация и таймер — общая инфраструктура.
+
+## Показ на чужом компьютере без установки .NET
+
+Скачай [готовую версию Windows x64](https://github.com/Fear2281/fear/raw/refs/heads/main/downloads/Encore_Windows_x64.zip). Полностью распакуй ZIP, перенеси папку на флешке и открой **Start_Encore.bat** на Windows 10/11 x64. Браузер откроется автоматически; Интернет и .NET SDK не нужны. Сайт работает через внутренний локальный сервер, окно запуска надо оставить открытым. В пакете также есть Word-документ. Сборка пакета выполнена на Linux для win-x64; выполнение на физической Windows здесь не проверялось.
+
+[Скачать Word с простым названием](https://github.com/Fear2281/fear/raw/refs/heads/main/docs/Encore_Report.docx).
