@@ -1,10 +1,24 @@
 using Encore.Core;
 using Encore.Modules;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
+using System.Net;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+var dataDirectory=builder.Configuration["ENCORE_DATA_DIR"] ?? Path.Combine(builder.Environment.ContentRootPath,"App_Data");
+var keysDirectory=Directory.CreateDirectory(Path.Combine(dataDirectory,"keys"));
+builder.Services.AddDataProtection().PersistKeysToFileSystem(keysDirectory);
+builder.Services.Configure<ForwardedHeadersOptions>(options=> {
+    options.ForwardedHeaders=ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    var trustedProxy=builder.Configuration["ENCORE_TRUSTED_PROXY"];
+    if(!string.IsNullOrEmpty(trustedProxy)) {
+        if(!IPAddress.TryParse(trustedProxy,out var address)) throw new InvalidOperationException("ENCORE_TRUSTED_PROXY должен быть IP-адресом вашего reverse proxy.");
+        options.KnownProxies.Add(address);
+    }
+});
 builder.Services.AddSingleton<MusicStore>();
 builder.Services.AddHostedService<QueueClock>();
 builder.Services.AddAuthentication("dj").AddCookie("dj", options => {
@@ -23,6 +37,7 @@ builder.Services.AddRateLimiter(options => {
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var app = builder.Build();
+app.UseForwardedHeaders();
 app.Use(async (context, next) => {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "same-origin";

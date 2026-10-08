@@ -22,11 +22,7 @@ public static class DjModule {
         group.MapPut("/settings",(Settings value,MusicStore store)=> {store.Update(value);return Results.Ok(new {ok=true});});
         group.MapGet("/tables",(MusicStore store)=>Results.Ok(store.Tables()));
         group.MapGet("/tables/{number:int}/qr",(int number, MusicStore store,HttpContext c,IConfiguration config)=> {
-            var baseUrl=(config["ENCORE_PUBLIC_URL"] ?? $"{c.Request.Scheme}://{c.Request.Host}").TrimEnd('/');
-            using var generator=new QRCodeGenerator();
-            using var data=generator.CreateQrCode($"{baseUrl}/table/{store.TableToken(number)}",QRCodeGenerator.ECCLevel.Q);
-            using var qr=new SvgQRCode(data);
-            return Results.Text(qr.GetGraphic(5),"image/svg+xml");
+            return Results.Text(QrLinks.Svg($"/table/{store.TableToken(number)}",c,config),"image/svg+xml");
         });
         group.MapGet("/export",(MusicStore store)=>Results.File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(store.Csv())).ToArray(),"text/csv; charset=utf-8","encore-report.csv"));
     }

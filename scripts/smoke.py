@@ -27,6 +27,7 @@ class Client:
         try:
             with self.opener.open(req, timeout=5) as response:
                 code, raw = response.status, response.read()
+                self.response_headers=response.headers
         except urllib.error.HTTPError as response:
             code, raw = response.code, response.read()
         assert code == expected, f'{method} {path}: expected {expected}, got {code}: {raw[:200]!r}'
@@ -62,9 +63,13 @@ with tempfile.TemporaryDirectory(prefix='encore-smoke-') as directory:
         dj.request('/api/dj/login','POST',{'password':'wrong'},401)
         dj.request('/api/dj/login','POST',{'password':'test-only-password'})
         tables = dj.request('/api/dj/tables')
-        assert len(tables) == 8 and len({t['token'] for t in tables}) == 8
+        assert len(tables) == 12 and len({t['token'] for t in tables}) == 12
         guest.request('/table/invalid',expected=404)
-        guest.request('/api/guest/demo','POST')
+        guest.request('/api/guest/select','POST',{'tableNumber':12},expected=200)
+        assert guest.request('/api/guest/session')['table']==12
+        assert [t['number'] for t in guest.request('/api/tables')]==list(range(1,13))
+        assert b'<svg' in guest.request('/api/qr')
+        guest.request('/table/'+tables[0]['token'])
         assert guest.request('/api/guest/session')['table'] == 1
         other.request('/table/'+tables[1]['token'])
         assert other.request('/api/guest/session')['table'] == 2
@@ -102,12 +107,23 @@ with tempfile.TemporaryDirectory(prefix='encore-smoke-') as directory:
         csv=dj.request('/api/dj/export')
         assert csv.startswith(b'\xef\xbb\xbf') and b'Frank Sinatra' in csv
         # Restart also verifies persistence and resets IP limiter for the next checks.
-        stop(); start()
+        stop()
+        # Simulate an existing eight-table installation, without altering real user data.
+        saved_path=Path(directory)/'state.json'
+        saved=json.loads(saved_path.read_text())
+        saved['Tables']=saved['Tables'][:8]
+        saved_path.write_text(json.dumps(saved))
+        start()
+        dj.request('/api/dj/state') # Persisted Data Protection keys keep existing DJ cookie valid.
         guest,other,dj=Client(),Client(),Client()
         dj.request('/api/dj/login','POST',{'password':'test-only-password'})
         restored=dj.request('/api/dj/state')
+        migrated=dj.request('/api/dj/tables')
+        assert len(migrated)==12
+        assert migrated[:8]==tables[:8]
         assert restored['stats']['total']==3 and restored['settings']['mood']=='Тихий ужин'
         guest.request('/table/'+tables[0]['token'])
+        guest.request('/api/guest/select','POST',{'tableNumber':99},expected=404)
         other.request('/table/'+tables[1]['token'])
         guest.request('/api/orders','POST',{'trackId':8},409)
         guest.request('/api/orders/'+third+'/vote','POST',expected=409)
@@ -126,6 +142,22 @@ with tempfile.TemporaryDirectory(prefix='encore-smoke-') as directory:
         guest.request('/api/orders','POST',{'trackId':1},409)
         dj.request('/api/dj/logout','POST')
         dj.request('/api/dj/state',expected=401)
+        stop()
+        env['ASPNETCORE_ENVIRONMENT']='Production'
+        env['ENCORE_PUBLIC_URL']='https://karaoke.example.com'
+        env['ENCORE_TRUSTED_PROXY']='127.0.0.1'
+        start()
+        production=Client()
+        production.request('/api/guest/demo','POST',expected=404)
+        production.request('/api/guest/select','POST',{'tableNumber':12})
+        assert production.request('/api/guest/session')['table']==12
+        assert production.request('/api/guest/session')['demo'] is False
+        production.request('/api/dj/login','POST',{'password':'encore-demo'},401)
+        production.request('/api/dj/login','POST',{'password':'test-only-password'})
+        proxy=Client()
+        proxy.request('/api/guest/select','POST',{'tableNumber':10},headers={'X-Forwarded-Proto':'https','Origin':'https://127.0.0.1:5081'})
+        assert 'secure' in proxy.response_headers.get('Set-Cookie','').lower()
+        assert b'<svg' in production.request('/api/qr')
         print(f'PASS: {passed} HTTP checks; moderation, voting, limits, access control, QR, CSV and restart persistence verified.')
     finally:
         stop(); log.close()

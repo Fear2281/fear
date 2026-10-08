@@ -35,31 +35,21 @@ public class MusicStore {
     private readonly string file;
     private SavedState state;
     private readonly Dictionary<string, GuestSession> sessions = [];
-    public IReadOnlyList<Track> Tracks { get; } = new List<Track> {
-        new(1,"Fly Me to the Moon","Frank Sinatra","Jazz",148,"peach","FS"),
-        new(2,"Feeling Good","Nina Simone","Soul",174,"purple","NS"),
-        new(3,"Сансара","Баста","Поп",362,"blue","Б"),
-        new(4,"City of Stars","Ryan Gosling & Emma Stone","Jazz",149,"green","LA"),
-        new(5,"Улыбайся","IOWA","Поп",201,"pink","IO"),
-        new(6,"Just the Two of Us","Grover Washington Jr.","Soul",237,"yellow","GW"),
-        new(7,"Тёмная ночь","Марк Бернес","Ретро",164,"blue","МБ"),
-        new(8,"Valerie","Amy Winehouse","Soul",219,"peach","AW"),
-        new(9,"Get Lucky","Daft Punk","Disco",248,"green","DP"),
-        new(10,"September","Earth, Wind & Fire","Disco",215,"yellow","EW"),
-        new(11,"Знаешь ли ты","МакSим","Поп",243,"pink","М"),
-        new(12,"Dream a Little Dream","Ella Fitzgerald","Jazz",185,"purple","EF"),
-        new(13,"Ночной город · explicit demo","Демо-каталог","Поп",180,"blue","EX",true)
-    };
+    public IReadOnlyList<Track> Tracks { get; } = TrackCatalog.All;
     public MusicStore(IWebHostEnvironment env) {
         var directory = Environment.GetEnvironmentVariable("ENCORE_DATA_DIR") ?? Path.Combine(env.ContentRootPath, "App_Data");
         Directory.CreateDirectory(directory);
         file = Path.Combine(directory, "state.json");
         state = File.Exists(file) ? JsonSerializer.Deserialize<SavedState>(File.ReadAllText(file)) ?? throw new InvalidDataException("Некорректный файл состояния") : new SavedState();
-        if (state.Tables.Count == 0) {
-            state.Tables = Enumerable.Range(1, 8).Select(n => new RestaurantTable(n, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant())).ToList();
-            Save();
+        var changed = false;
+        for(var number = 1; number <= 12; number++) {
+            if(state.Tables.Any(t => t.Number == number)) continue;
+            state.Tables.Add(new RestaurantTable(number, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()));
+            changed = true;
         }
+        if(changed) Save();
     }
+    public object TableNumbers() { lock(gate) return state.Tables.OrderBy(t=>t.Number).Select(t=>new {number=t.Number}).ToArray(); }
     private void Save() {
         var temporary = file + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));

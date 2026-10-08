@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ENCORE_DJ_PASSWORD: ${ENCORE_DJ_PASSWORD:?Set a private DJ password in .env}
+      ENCORE_PUBLIC_URL: https://${DOMAIN:?Set your real domain in .env}
+      ENCORE_TRUSTED_PROXY: 172.29.77.2
+      AllowedHosts: ${DOMAIN}
+    volumes:
+      - encore-data:/data
+    networks:
+      web:
+        ipv4_address: 172.29.77.3
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set your real domain in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      web:
+        ipv4_address: 172.29.77.2
+    depends_on:
+      - app
+volumes:
+  encore-data:
+  caddy-data:
+  caddy-config:
+networks:
+  web:
+    ipam:
+      config:
+        - subnet: 172.29.77.0/24

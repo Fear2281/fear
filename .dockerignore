@@ -1,0 +1,8 @@
+.git
+bin
+obj
+App_Data
+docs
+scripts
+.env
+*.log
